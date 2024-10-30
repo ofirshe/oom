@@ -22,6 +22,22 @@ from flask import Flask, request
 from oom.oomjsonshim import jpdict_to_cport, cport_to_json
 from oom.oomtypes import c_port_t
 from oom import *
+import argparse
+import sys
+
+def load_shimparams_from_file(filepath):
+    """Load parameters from a JSON file if provided, otherwise return None."""
+    if not filepath:
+        return None  # Return None if no filepath is specified
+    try:
+        with open(filepath, 'r') as file:
+            params = json.load(file)
+            if not isinstance(params, dict):
+                raise ValueError("Parameters file should contain a JSON object (dictionary).")
+            return params
+    except Exception as e:
+        print(f"Failed to load parameters from file {filepath}: {e}")
+        raise
 
 
 #
@@ -149,6 +165,28 @@ portlist = portlist()
 oomlib.oom_portlist_nokeys = 1    # secret speedup for oom_get_portlist()
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="OOM JSON server arguments")
+    parser.add_argument('--shimfile', required=False, help="Shim module file to load")
+    parser.add_argument('--shimparams', required=False, help="Path to the JSON file containing shim parameters")
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # Dynamically add the shim's directory to sys.path
+    if args.shimfile:
+        shim_dir = os.path.dirname(os.path.abspath(args.shimfile))
+        if shim_dir not in sys.path:
+            sys.path.insert(0, shim_dir)
+
+        # Extract the shim module name (without .py extension)
+        shim_module_name = os.path.basename(args.shimfile).replace('.py', '')
+
+        # Load shim parameters
+        shim_parameters = load_shimparams_from_file(args.shimparams)  # Load parameters, or None if no file provided
+
+        # Set the shim with the specified shimfile and parameters from file (or None)
+        oomlib.setshim(shim_module_name, shim_parameters)
+
     # to debug locally use:
     # app.run(debug=True)
     # to be visible across the network, use:
